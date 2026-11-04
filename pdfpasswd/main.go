@@ -12,7 +12,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/digitorus/pdf"
+	"github.com/gerege-systems/pdf"
 )
 
 var (
