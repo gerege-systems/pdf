@@ -10,18 +10,29 @@ import (
 	"testing"
 )
 
+// readObjectPanic parses one object and returns the panic value, if any.
+func readObjectPanic(input string) (p interface{}) {
+	defer func() { p = recover() }()
+	b := newBuffer(strings.NewReader(input), 0)
+	b.allowEOF = true
+	b.readObject()
+	return nil
+}
+
 func TestNestingDepthLimit(t *testing.T) {
-	at := strings.Repeat("[", maxObjectDepth) + strings.Repeat("]", maxObjectDepth)
-	if readObjectErr(t, at, true) {
-		t.Fatalf("%d nested arrays rejected", maxObjectDepth)
+	nested := map[string]func(n int) string{
+		"arrays":       func(n int) string { return strings.Repeat("[", n) + strings.Repeat("]", n) },
+		"dictionaries": func(n int) string { return strings.Repeat("<</A ", n-1) + "null" + strings.Repeat(">>", n-1) },
+		"objdefs":      func(n int) string { return strings.Repeat("1 0 obj ", n-1) + "null" + strings.Repeat(" endobj", n-1) },
 	}
-	for name, input := range map[string]string{
-		"arrays":       strings.Repeat("[", maxObjectDepth+1) + strings.Repeat("]", maxObjectDepth+1),
-		"dictionaries": strings.Repeat("<</A ", maxObjectDepth+1) + "null" + strings.Repeat(">>", maxObjectDepth+1),
-		"objdefs":      strings.Repeat("1 0 obj ", maxObjectDepth+1) + "null",
-	} {
-		if !readObjectErr(t, input, true) {
-			t.Errorf("%s: nesting deeper than %d accepted", name, maxObjectDepth)
+	for name, build := range nested {
+		// n levels of readObject: the outermost call plus n-1 nested ones.
+		if p := readObjectPanic(build(maxObjectDepth)); p != nil {
+			t.Errorf("%s: %d levels rejected: %v", name, maxObjectDepth, p)
+		}
+		p := readObjectPanic(build(maxObjectDepth + 1))
+		if err, ok := p.(error); !ok || !strings.Contains(err.Error(), "nested deeper than") {
+			t.Errorf("%s: %d levels: got %v, want the depth error", name, maxObjectDepth+1, p)
 		}
 	}
 }
