@@ -47,6 +47,7 @@ type buffer struct {
 	key         []byte
 	useAES      bool
 	objptr      objptr
+	depth       int // readObject recursion depth (see maxObjectDepth)
 }
 
 // newBuffer returns a new buffer reading from r at the given offset.
@@ -431,7 +432,19 @@ type objdef struct {
 	obj object
 }
 
+// maxObjectDepth bounds how deeply readObject may recurse: arrays, dictionaries and
+// indirect object definitions ("1 0 obj 1 0 obj ...") each add a level. Without a bound,
+// a few megabytes of "[[[[" decompressed from an object stream exhaust the goroutine
+// stack, and a stack overflow is a fatal error that recover cannot catch. Real documents
+// nest a few dozen levels at most.
+const maxObjectDepth = 1000
+
 func (b *buffer) readObject() object {
+	b.depth++
+	defer func() { b.depth-- }()
+	if b.depth > maxObjectDepth {
+		b.errorf("malformed PDF: objects nested deeper than %d levels", maxObjectDepth)
+	}
 	tok := b.readToken()
 	if kw, ok := tok.(keyword); ok {
 		switch kw {

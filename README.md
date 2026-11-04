@@ -19,6 +19,9 @@ denial-of-service hardening for hostile input (2026-10-21):
   forever;
 - an object stream `/Extends` chain that loops back is no longer followed;
 - object stream scanning stops at the end of the stream when `/N` overstates the number of objects.
+- objects nested deeper than 1000 levels (arrays, dictionaries, `N G obj` definitions) are reported as
+  malformed instead of exhausting the goroutine stack, which is a fatal error `recover` cannot catch
+  (2026-11-04).
 
 ### Why a separate module path
 
